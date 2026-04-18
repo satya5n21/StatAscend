@@ -34,6 +34,16 @@ router.get('/me', (req, res) => {
   res.json(req.user);
 });
 
+// GET /api/v1/quests - Get all quests
+router.get('/quests', async (req, res) => {
+  try {
+    const quests = await Quest.find({});
+    res.json(quests);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/v1/trigger-event - Generic ping from python scripts
 router.post('/trigger-event', async (req, res) => {
   const { event_type, exp_reward = 10, mora_reward = 100 } = req.body;

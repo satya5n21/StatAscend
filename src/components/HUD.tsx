@@ -32,7 +32,8 @@ export const HUD = () => {
           StatAscend
         </NavLink>
         <div className="hidden md:flex gap-4 ml-4">
-          <NavLink to="/dashboard" className={({isActive}) => `text-sm font-medium transition-colors ${isActive ? 'text-[var(--color-secondary)]' : 'text-gray-300 hover:text-white'}`}>Quests</NavLink>
+          <NavLink to="/dashboard" className={({isActive}) => `text-sm font-medium transition-colors ${isActive ? 'text-[var(--color-secondary)]' : 'text-gray-300 hover:text-white'}`}>Home</NavLink>
+          <NavLink to="/quests" className={({isActive}) => `text-sm font-medium transition-colors ${isActive ? 'text-[var(--color-secondary)]' : 'text-gray-300 hover:text-white'}`}>Quests</NavLink>
           <NavLink to="/inventory" className={({isActive}) => `text-sm font-medium transition-colors ${isActive ? 'text-[var(--color-secondary)]' : 'text-gray-300 hover:text-white'}`}>Inventory</NavLink>
           <NavLink to="/wish" className={({isActive}) => `text-sm font-medium transition-colors ${isActive ? 'text-[var(--color-secondary)]' : 'text-gray-300 hover:text-white'}`}>Wish</NavLink>
         </div>
