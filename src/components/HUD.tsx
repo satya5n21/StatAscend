@@ -26,7 +26,7 @@ export const HUD = () => {
   if (!userData) return <div className="p-4 text-center text-[var(--color-primary)]">Loading Link to Celestia...</div>;
 
   return (
-    <nav className="glass sticky top-0 z-50 px-6 py-3 flex justify-between items-center w-full">
+    <nav className="sticky top-0 z-50 px-6 pt-4 pb-12 flex justify-between items-center w-full bg-gradient-to-b from-black/80 via-black/40 to-transparent">
       <div className="flex gap-6 items-center">
         <NavLink to="/dashboard" className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)]">
           StatAscend

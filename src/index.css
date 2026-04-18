@@ -28,17 +28,26 @@ body {
 }
 
 .glass-card {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid rgba(255, 215, 0, 0.3);
   border-radius: 12px;
   transition: all 0.3s ease;
 }
 
 .glass-card:hover {
-  border-color: rgba(139, 92, 246, 0.6);
+  border-color: rgba(255, 215, 0, 0.6);
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 10px 25px -5px rgba(255, 215, 0, 0.2);
+}
+
+@keyframes breatheGlow {
+  0%, 100% { box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), 0 0 10px rgba(236, 72, 153, 0.4); }
+  50% { box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), 0 0 25px rgba(236, 72, 153, 0.8); }
+}
+
+.animate-breathe {
+  animation: breatheGlow 3s ease-in-out infinite;
 }
 
 /* Custom Scrollbar */
