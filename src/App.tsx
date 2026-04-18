@@ -1,4 +1,6 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import api from './lib/axios';
 import { HUD } from './components/HUD';
 import { Dashboard } from './pages/Dashboard';
 import { Quests } from './pages/Quests';
@@ -7,9 +9,31 @@ import { GachaWish } from './pages/GachaWish';
 import { Inventory } from './pages/Inventory';
 import { VideoBackground } from './components/VideoBackground';
 
+const GlobalFocusSync = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const checkFocusStatus = async () => {
+      try {
+        const response = await api.get('/focus/status');
+        if (response.data?.active && location.pathname !== '/focus') {
+          navigate('/focus');
+        }
+      } catch (err) {
+        console.error("Focus sync error:", err);
+      }
+    };
+    checkFocusStatus();
+  }, [navigate, location.pathname]);
+
+  return null;
+};
+
 function App() {
   return (
     <Router>
+      <GlobalFocusSync />
       <div className="min-h-screen text-[var(--color-text)] flex flex-col bg-transparent">
         <VideoBackground />
         <HUD />

@@ -2,6 +2,7 @@ import express from 'express';
 import User from '../models/User.js';
 import Quest from '../models/Quest.js';
 import ResinService from '../services/ResinService.js';
+import { getRedisClient } from '../config/redis.js';
 
 const router = express.Router();
 
@@ -56,49 +57,146 @@ router.post('/trigger-event', async (req, res) => {
   res.json({ message: 'Event triggered successfully', rewards: { exp: exp_reward, mora: mora_reward }, user });
 });
 
-// POST /api/v1/domain/start - Deduct resin and lock UI into /focus
-router.post('/domain/start', async (req, res) => {
-  const { quest_id } = req.body;
+// GET /api/v1/focus/status
+router.get('/focus/status', async (req, res) => {
+  try {
+    const redisClient = getRedisClient();
+    if (!redisClient) {
+      return res.status(503).json({ error: 'Redis client not reachable' });
+    }
+    const sessionData = await redisClient.get(`focus_session:${req.user._id}`);
+    if (sessionData) {
+      return res.json({ active: true, session: JSON.parse(sessionData) });
+    }
+    res.json({ active: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/focus/start
+router.post('/focus/start', async (req, res) => {
+  const { block_type } = req.body; // 'instant', 'skirmish', 'main', 'boss'
   
   try {
-    let quest;
-    let resinCost = 20; // Default domain cost
-
-    if (quest_id) {
-      quest = await Quest.findById(quest_id);
-      if (!quest) return res.status(404).json({ error: 'Quest not found' });
-      resinCost = quest.resin_cost;
+    let durationMins = 0;
+    let resinCost = 0;
+    
+    switch (block_type) {
+      case 'skirmish': durationMins = 20; resinCost = 20; break;
+      case 'main': durationMins = 40; resinCost = 40; break;
+      case 'boss': durationMins = 90; resinCost = 60; break;
+      case 'instant':
+      default:
+        // Handle instant clear directly here instead of using focus session?
+        // Actually instant clear shouldn't create a session, but let's handle the request here for simplicity
+        if (block_type === 'instant') {
+           const updatedUser = await ResinService.consumeResin(req.user, 0); // 0 resin
+           updatedUser.exp += 10;
+           updatedUser.wallets.mora += 100;
+           await updatedUser.save();
+           return res.json({ message: 'Instant Drop Claimed', drops: { exp: 10, mora: 100 } });
+        }
+        return res.status(400).json({ error: 'Invalid block type' });
     }
 
-    // Try consuming resin
+    const redisClient = getRedisClient();
+    const existing = await redisClient.get(`focus_session:${req.user._id}`);
+    if (existing) {
+       return res.status(400).json({ error: 'Focus session already active' });
+    }
+
     const updatedUser = await ResinService.consumeResin(req.user, resinCost);
+    
+    const now = Date.now();
+    const session = {
+       block_type,
+       start_time: now,
+       end_time: now + durationMins * 60 * 1000,
+       resin_cost: resinCost,
+       duration_mins: durationMins
+    };
+    
+    await redisClient.set(`focus_session:${req.user._id}`, JSON.stringify(session));
 
-    // Assume frontend handles the "Focus Mode" locking, backend just acks the transaction
     res.json({ 
-      message: 'Domain Started', 
+      message: 'Focus Domain Started', 
       resin_remaining: updatedUser.resin.current,
-      quest: quest || { title: 'Random Domain', timer_duration: 25 }
+      session
     });
-
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// POST /api/v1/domain/complete - Domain finished successfully
-router.post('/domain/complete', async (req, res) => {
-   // In a full game, we'd verify the start time vs current time to prevent cheating.
-   const user = req.user;
-   
-   // Mock RNG drops
-   const exp = 50;
-   const mora = 2000;
-   
-   user.exp += exp;
-   user.wallets.mora += mora;
-   await user.save();
+// POST /api/v1/focus/claim
+router.post('/focus/claim', async (req, res) => {
+   try {
+     const redisClient = getRedisClient();
+     const sessionData = await redisClient.get(`focus_session:${req.user._id}`);
+     
+     if (!sessionData) {
+       return res.status(404).json({ error: 'No active session found.' });
+     }
+     
+     const session = JSON.parse(sessionData);
+     const now = Date.now();
+     
+     if (now < session.end_time) {
+       return res.status(400).json({ error: 'Domain timer has not finished.' });
+     }
+     
+     // Calculate Overtime
+     const overtimeMs = now - session.end_time;
+     const overtimeMins = Math.max(0, Math.floor(overtimeMs / 60000));
+     
+     let baseExp = 0;
+     let baseMora = 0;
+     
+     switch (session.block_type) {
+        case 'skirmish': baseExp = 100; baseMora = 1000; break;
+        case 'main': baseExp = 200; baseMora = 2000; break;
+        case 'boss': baseExp = 300; baseMora = 3000; break;
+     }
+     
+     const totalMora = baseMora + (overtimeMins * 10);
+     const totalExp = baseExp; // No extra exp per 10 mins as per instruction "Total Mora=Base Mora+(Overtime Minutes×10)"
+     
+     req.user.exp += totalExp;
+     req.user.wallets.mora += totalMora;
+     await req.user.save();
+     
+     await redisClient.del(`focus_session:${req.user._id}`);
+     
+     res.json({ message: 'Domain Cleared', drops: { exp: totalExp, mora: totalMora }, overtime_mins: overtimeMins });
+   } catch(err) {
+     res.status(500).json({ error: err.message });
+   }
+});
 
-   res.json({ message: 'Domain Cleared', drops: { exp, mora } });
+// POST /api/v1/focus/forfeit
+router.post('/focus/forfeit', async (req, res) => {
+   try {
+     const redisClient = getRedisClient();
+     const sessionData = await redisClient.get(`focus_session:${req.user._id}`);
+     
+     if (!sessionData) {
+       return res.status(404).json({ error: 'No active session found.' });
+     }
+     
+     const session = JSON.parse(sessionData);
+     
+     // Refund 50% rounded
+     const refund = Math.floor(session.resin_cost / 2);
+     req.user.resin.current = Math.min(200, req.user.resin.current + refund); // assuming cap is 200
+     await req.user.save();
+     
+     await redisClient.del(`focus_session:${req.user._id}`);
+     
+     res.json({ message: 'Domain Forfeited', refund });
+   } catch(err) {
+     res.status(500).json({ error: err.message });
+   }
 });
 
 
